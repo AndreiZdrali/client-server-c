@@ -7,9 +7,6 @@
 
 using namespace std;
 
-#define BUFSIZE 1600
-#define MAX_SUBS 32
-
 int sockfd_udp, sockfd_tcp, port, ret;
 struct sockaddr_in addr_udp, addr_tcp;
 char buffer[BUFSIZE];
@@ -55,8 +52,7 @@ void start_udp_tcp() {
 void handle_stdin() {
     fgets(buffer, BUFSIZE, stdin);
 
-    //TODO: sa verific daca 5 e ok
-    if (strncmp(buffer, "exit", 4) == 0 && strlen(buffer) == 5) {
+    if (strncmp(buffer, "exit", 4) == 0) {
         for (int i = 0; i < clients.size(); i++) {
             //TODO: trimit exit la toti clientii
         }
@@ -65,7 +61,7 @@ void handle_stdin() {
         close(sockfd_tcp);
         running = 0;
     } else {
-        //TODO: nu stiu daca printf e conform cerintei
+        //FIXME: nu stiu daca printf e conform cerintei
         printf("Invalid command\n");
     }
 }
@@ -75,11 +71,10 @@ void handle_udp_message() {
 }
 
 void handle_tcp_request() {
-    //dezaactiveaza alg lui nagle
+    //dezactiveaza alg lui nagle
     int flag = 1;
     ret = setsockopt(sockfd_tcp, IPPROTO_TCP, TCP_NODELAY, (char *) &flag, sizeof(int));
     DIE(ret < 0, "setsockopt");
-    
 
     //TODO: verifica daca id e unic sau daca a mai fost folosit
     exit(1);
@@ -111,7 +106,7 @@ int main(int argc, char *argv[]) {
     nfds++;
 
     while (running) {
-        ret = poll(pfds, nfds, -1);
+        poll(pfds, nfds, -1);
 
         //input de la stdin
         if ((pfds[0].revents & POLLIN) != 0) {
