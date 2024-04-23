@@ -29,7 +29,7 @@ void handle_stdin() {
     ret = send(sockfd, buffer, strlen(buffer), 0);
     DIE(ret < 0, "send");
 
-    char *action, *topic;
+    char *action = NULL, *topic = NULL;
     char *p = strtok(buffer, " ");
     strcpy(action, p);
     if (p == NULL) {
@@ -51,10 +51,71 @@ void handle_stdin() {
     }
 }
 
+void handle_tcp() {
+    ret = recv(sockfd, buffer, sizeof(buffer), 0);
+    DIE(ret < 0, "recv");
+
+    if (strcmp(buffer, "exit") == 0) {
+        running = 0;
+        return;
+    }
+
+    tcp_message *msg = (tcp_message *)buffer;
+    
+    //"<IP_CLIENT_UDP>:<PORT_CLIENT_UDP> - <TOPIC> - "
+    printf("%s:%i - %s - ", inet_ntoa(msg->udp_addr.sin_addr), ntohs(msg->udp_addr.sin_port), msg->topic);
+
+    //"<TIP_DATE> - <VALOARE_MESAJ>"
+    switch (msg->type) {
+        //INT
+        case 0:
+            uint8_t sign_int;
+            uint32_t value_int;
+            sign_int = *(uint8_t *)msg->payload;
+            value_int = ntohl(*(uint32_t *)(msg->payload + 1)); //FIXME: posibil fara ntohl
+            
+            if (sign_int)
+                value_int = -value_int;
+
+            printf("INT - %d\n", value_int);
+            break;
+        //SHORT_REAL
+        case 1:
+            float value_short_real;
+            value_short_real = (float)ntohs(*(uint16_t *)msg->payload) / 100.0;
+
+            printf("SHORT_REAL - %.2f\n", value_short_real);
+            break;
+        //FLOAT
+        case 2:
+            float value_float;
+            uint8_t sign_float, power;
+            sign_float = *(uint8_t *)msg->payload;
+            value_float = ntohl(*(uint32_t *)(msg->payload + 1)); //FIXME: posibil fara ntohl
+            power = *(uint8_t *)(msg->payload + 5);
+
+            value_float /= pow(10, power);
+
+            if (sign_float)
+                value_float = -value_float;
+
+            printf("FLOAT - %.4f\n", value_float);
+            break;
+        //STRING
+        case 3:
+            msg->payload[BUFSIZE] = '\0'; //FIXME: cred ca e inutil asta
+            printf("STRING - %s\n", msg->payload);
+            break;
+    }
+}
+
 int main(int argc, char *argv[]) {
     setvbuf(stdout, NULL, _IONBF, BUFSIZ);
 
-    //TODO: verifica argc == 4
+    if (argc < 4) {
+        printf("%s <ID_CLIENT> <IP_SERVER> <PORT_SERVER>", argv[0]);
+        exit(0);
+    }
 
     sockfd = socket(AF_INET, SOCK_STREAM, 0);
     DIE(sockfd < 0, "socket");
@@ -92,36 +153,7 @@ int main(int argc, char *argv[]) {
         }
         //tcp
         else if ((pfds[1].revents & POLLIN) != 0) {
-            ret = recv(sockfd, buffer, sizeof(buffer), 0);
-            DIE(ret < 0, "recv");
-
-            if (strcmp(buffer, "exit") == 0) {
-                running = 0;
-                continue;
-            }
-
-            tcp_message *msg = (tcp_message *)buffer;
-            
-            //"<IP_CLIENT_UDP>:<PORT_CLIENT_UDP> - <TOPIC> - "
-            printf("%s:%i - %s - ", inet_ntoa(msg->udp_addr.sin_addr), ntohs(msg->udp_addr.sin_port), msg->topic);
-
-            //"<TIP_DATE> - <VALOARE_MESAJ>"
-            switch (msg->type) {
-                //INT
-                case 0:
-                    uint8_t sign; uint32_t value;
-                    sign = *(uint8_t *)msg->payload;
-                    value = ntohl(*(uint32_t *)(msg->payload + 1)); //FIXME: posibil fara ntohl
-                    
-                    if (sign)
-                        value = -value;
-
-                    printf("INT - %d\n", value);
-                    break;
-                //SHORT_REAL
-                case 1:
-                    //TODO: AICI AM RAMAS
-            }
+            handle_tcp();
         }
     }
 

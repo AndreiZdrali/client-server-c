@@ -77,7 +77,7 @@ void handle_tcp_request() {
     DIE(ret < 0, "setsockopt");
 
     //TODO: verifica daca id e unic sau daca a mai fost folosit
-    exit(1);
+    //exit(1);
 }
 
 void handle_tcp_message() {
