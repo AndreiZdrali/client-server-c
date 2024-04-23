@@ -15,6 +15,7 @@ using namespace std;
 	} while (0)
 
 #define BUFSIZE 1600
+#define PAYLOADSIZE 1500
 #define MAX_SUBS 32
 
 //TODO: sa vad daca includ id in structura sau fac un
@@ -30,7 +31,7 @@ typedef struct {
 typedef struct {
 	char topic[50];
 	uint8_t type;
-	char payload[BUFSIZE];
+	char payload[PAYLOADSIZE];
 } udp_message;
 
 //pachet trimits de server catre client tcp
@@ -38,5 +39,5 @@ typedef struct {
 	struct sockaddr_in udp_addr; //adresa udp care a trimis mesajul catre sv
 	char topic[51];
 	uint8_t type;
-	char payload[BUFSIZE];
+	char payload[PAYLOADSIZE];
 } tcp_message;

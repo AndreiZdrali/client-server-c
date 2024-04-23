@@ -55,7 +55,7 @@ void handle_tcp() {
     ret = recv(sockfd, buffer, sizeof(buffer), 0);
     DIE(ret < 0, "recv");
 
-    if (strcmp(buffer, "exit") == 0) {
+    if (strcmp(buffer, "exit") == 0 || ret == 0) {
         running = 0;
         return;
     }
@@ -103,7 +103,7 @@ void handle_tcp() {
             break;
         //STRING
         case 3:
-            msg->payload[BUFSIZE] = '\0'; //FIXME: cred ca e inutil asta
+            msg->payload[PAYLOADSIZE] = '\0'; //FIXME: cred ca e inutil asta
             printf("STRING - %s\n", msg->payload);
             break;
     }
@@ -113,7 +113,7 @@ int main(int argc, char *argv[]) {
     setvbuf(stdout, NULL, _IONBF, BUFSIZ);
 
     if (argc < 4) {
-        printf("%s <ID_CLIENT> <IP_SERVER> <PORT_SERVER>", argv[0]);
+        printf("%s <ID_CLIENT> <IP_SERVER> <PORT_SERVER>\n", argv[0]);
         exit(0);
     }
 
