@@ -20,31 +20,38 @@ void handle_stdin() {
     fgets(buffer, BUFSIZE - 1, stdin);
 
     if (strncmp(buffer, "exit", 4) == 0) {
+        ret = send(sockfd, buffer, strlen(buffer), 0);
+        DIE(ret < 0, "send");
+
         running = 0;
         return;
     }
 
     buffer[strlen(buffer) - 1] = '\0';
+    printf("Command: %s, %d\n", buffer, strlen(buffer));
     
     ret = send(sockfd, buffer, strlen(buffer), 0);
     DIE(ret < 0, "send");
 
-    char *action = NULL, *topic = NULL;
+    //TODO: sa rescriu cu find si aici si in server.cpp
+    char action[12], topic[51];
     char *p = strtok(buffer, " ");
-    strcpy(action, p);
     if (p == NULL) {
         printf("Invalid command\n");
+        return;
     }
+    strcpy(action, p);
 
     p = strtok(NULL, " \n");
-    strcpy(topic, p);
     if (p == NULL) {
         printf("Invalid command\n");
+        return;
     }
+    strcpy(topic, p);
 
-    if (strncmp(action, "subscribe", 9) == 0) {
+    if (strncmp(buffer, "subscribe", 9) == 0) {
         printf("Subscribed to topic %s\n", topic);
-    } else if (strncmp(action, "unsubscribe", 11) == 0) {
+    } else if (strncmp(buffer, "unsubscribe", 11) == 0) {
         printf("Unsubscribed from topic %s\n", topic);
     } else {
         printf("Invalid command\n");
@@ -67,7 +74,7 @@ void handle_tcp() {
 
     //"<TIP_DATE> - <VALOARE_MESAJ>"
     switch (msg->type) {
-        //INT
+        //INT //TODO: GRESEALA AICI SAU IN server.cpp la INT
         case 0:
             uint8_t sign_int;
             uint32_t value_int;
@@ -86,7 +93,7 @@ void handle_tcp() {
 
             printf("SHORT_REAL - %.2f\n", value_short_real);
             break;
-        //FLOAT
+        //FLOAT //TODO: GRESEALA AICI SAU IN server.cpp la FLOAT
         case 2:
             float value_float;
             uint8_t sign_float, power;

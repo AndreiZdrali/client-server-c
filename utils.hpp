@@ -24,7 +24,7 @@ typedef struct {
     string id;
     int sockfd;
     bool connected;
-    vector<string> topics;
+    vector<pair<string, regex>> topics;
 } subscriber;
 
 //pachet trimis de client udp catre server

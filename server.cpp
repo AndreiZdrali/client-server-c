@@ -4,6 +4,7 @@
 #include <netinet/tcp.h>
 #include <arpa/inet.h>
 #include <poll.h>
+#include <regex.h>
 #include "utils.hpp"
 
 using namespace std;
@@ -50,12 +51,54 @@ void init_udp_tcp() {
     DIE(ret < 0, "listen");
 }
 
-bool is_subscribed(subscriber sub, string topic) {
+regex topic_to_regex(string topic) {
+    // "*" face match cu orice
+    size_t pos = topic.find("*");
+    while (pos != string::npos) {
+        topic.replace(pos, 1, ".*");
+        pos = topic.find("*", pos + 2);
+    }
+
+    // "+" face match cu orice in afara de "/"
+    pos = topic.find("+");
+    while (pos != string::npos) {
+        topic.replace(pos, 1, "[^/]*");
+        pos = topic.find("+", pos + 4);
+    }
+
+    return regex(topic);
+}
+
+//pt cand verific daca un client e deja abonat la un topic
+bool is_subscribed_topic(subscriber sub, string topic) {
     for (size_t i = 0; i < sub.topics.size(); i++) {
-        //TODO: verificare topic cu wildcard
+        if (sub.topics[i].first == topic) {
+            return true;
+        }
     }
 
     return false;
+}
+
+//pt cand verific daca trb sa trimit mesajul unui client
+bool is_subscribed_regex(subscriber sub, string topic) {
+    for (size_t i = 0; i < sub.topics.size(); i++) {
+        if (regex_match(topic, sub.topics[i].second)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+subscriber *get_subscriber_by_fd(int sockfd) {
+    for (size_t i = 0; i < clients.size(); i++) {
+        if (clients[i].sockfd == sockfd) {
+            return &clients[i];
+        }
+    }
+
+    return NULL;
 }
 
 //========================================================
@@ -65,11 +108,8 @@ void handle_stdin() {
 
     if (strncmp(buffer, "exit", 4) == 0) {
         for (size_t i = 0; i < clients.size(); i++) {
-            //TODO: trimit exit la toti clientii
+            //TODO: trimit exit la toti clientii (optional)
         }
-
-        close(sockfd_udp);
-        close(sockfd_tcp);
         running = 0;
     } else {
         //FIXME: nu stiu daca printf e conform cerintei
@@ -100,7 +140,7 @@ void handle_udp_message() {
             continue;
         }
 
-        if (is_subscribed(clients[i], topic)) {
+        if (is_subscribed_regex(clients[i], topic)) {
             ret = send(clients[i].sockfd, &tcp_msg, sizeof(tcp_msg), 0);
             DIE(ret < 0, "send");
         }
@@ -152,15 +192,79 @@ void handle_tcp_request() {
     sub.id = id;
     sub.connected = true;
     sub.sockfd = newsockfd;
-    sub.topics = vector<string>();
+    sub.topics = vector<pair<string, regex>>();
 
     clients.push_back(sub);
 
-    printf("New client %s connected\n", id.c_str());
+    printf("New client %s connected from %s:%hu.\n", id.c_str(), inet_ntoa(addr_tcp.sin_addr), ntohs(addr_tcp.sin_port));
 }
 
-void handle_tcp_message() {
-    //exit(1);
+void handle_tcp_message(int sockfd) {
+    //TODO: cazuri cu subscribe, unsubscribe, exit
+    memset(buffer, 0, BUFSIZE);
+
+    ret = recv(sockfd, buffer, BUFSIZE, 0);
+    DIE(ret < 0, "recv");
+
+    subscriber *sub = get_subscriber_by_fd(sockfd);
+    
+    if (ret == 0) {
+        if (sub != NULL) {
+            sub->connected = false;
+            sub->sockfd = -1;
+
+            close(sockfd);
+            printf("Client %s disconnected.\n", sub->id.c_str());
+        }
+        return;
+    }
+
+    char action[12], topic[51];
+    char *p = strtok(buffer, " ");
+    if (p == NULL) {
+        //printf("Invalid command\n"); //debug
+        return;
+    }
+    strcpy(action, p);
+
+    p = strtok(NULL, " \n");
+    if (p == NULL) {
+        //printf("Invalid command\n"); //debug
+        return;
+    }
+    strcpy(topic, p);
+
+    if (strncmp(buffer, "subscribe", 9) == 0) {
+        //TODO: vf daca e deja abonat si-l aboneaza (cred ca e gata)
+
+        if (is_subscribed_topic(*sub, topic)) {
+            //printf("Client %s already subscribed to topic %s\n", sub->id.c_str(), topic); //debug
+            return;
+        }
+        sub->topics.push_back(make_pair(topic, topic_to_regex(topic)));
+        //printf("Client %s subscribed to topic %s\n", sub->id.c_str(), topic); //debug
+    } else if (strncmp(buffer, "unsubscribe", 11) == 0) {
+        //TODO: vf daca e deja abonat si-l dezaboneaza (cred ca e gata)
+        
+        for (size_t i = 0; i < sub->topics.size(); i++) {
+            if (sub->topics[i].first == topic) {
+                sub->topics.erase(sub->topics.begin() + i);
+                //printf("Client %s unsubscribed from topic %s\n", sub->id.c_str(), topic); //debug
+                return;
+            }
+        }
+    } else {
+        //printf("Invalid command\n"); //debug
+    }
+}
+
+void close_sockets() {
+    close(sockfd_udp);
+    close(sockfd_tcp);
+
+    for (size_t i = 0; i < clients.size(); i++) {
+        close(clients[i].sockfd);
+    }
 }
 
 int main(int argc, char *argv[]) {
@@ -206,10 +310,13 @@ int main(int argc, char *argv[]) {
         }
         //primeste mesaj de la un client
         else {
-            handle_tcp_message();
+            for (size_t i = 3; i < nfds; i++) {
+                if ((pfds[i].revents & POLLIN) != 0) {
+                    handle_tcp_message(pfds[i].fd);
+                }
+            }
         }
     }
 
-    close(sockfd_udp);
-    close(sockfd_tcp);
+    close_sockets();
 }
