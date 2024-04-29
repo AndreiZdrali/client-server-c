@@ -8,6 +8,8 @@
 
 using namespace std;
 
+#define DEBUG false
+
 int sockfd, ret;
 struct sockaddr_in serv_addr;
 char buffer[BUFSIZE];
@@ -15,6 +17,16 @@ char buffer[BUFSIZE];
 struct pollfd pfds[2];
 int nfds = 0;
 int running = 1;
+
+void debug_printf(const char *format, ...) {
+    if (DEBUG) {
+        printf("DEBUG: ");
+        va_list args;
+        va_start(args, format);
+        vprintf(format, args);
+        va_end(args);
+    }
+}
 
 void handle_stdin() {
     fgets(buffer, BUFSIZE - 1, stdin);
@@ -28,33 +40,37 @@ void handle_stdin() {
     }
 
     buffer[strlen(buffer) - 1] = '\0';
-    printf("Command: %s, %d\n", buffer, strlen(buffer));
+    debug_printf("Command: %s, %d\n", buffer, strlen(buffer));
     
     ret = send(sockfd, buffer, strlen(buffer), 0);
     DIE(ret < 0, "send");
 
     //TODO: sa rescriu cu find si aici si in server.cpp
-    char action[12], topic[51];
-    char *p = strtok(buffer, " ");
-    if (p == NULL) {
-        printf("Invalid command\n");
+    string action, topic, buffer_str(buffer);
+
+    size_t pos = buffer_str.find(" ");
+    if (pos == string::npos) {
+        debug_printf("Invalid command\n");
         return;
     }
-    strcpy(action, p);
 
-    p = strtok(NULL, " \n");
-    if (p == NULL) {
-        printf("Invalid command\n");
+    action = buffer_str.substr(0, pos);
+
+    size_t start = buffer_str.find_first_not_of(" ", pos);
+    if (start == string::npos) {
+        debug_printf("Invalid command\n");
         return;
     }
-    strcpy(topic, p);
 
-    if (strncmp(buffer, "subscribe", 9) == 0) {
-        printf("Subscribed to topic %s\n", topic);
-    } else if (strncmp(buffer, "unsubscribe", 11) == 0) {
-        printf("Unsubscribed from topic %s\n", topic);
+    pos = buffer_str.find_first_of(" \n", start);
+    topic = buffer_str.substr(start, pos - start);
+
+    if (action == "subscribe") {
+        printf("Subscribed to topic %s\n", topic.c_str());
+    } else if (action == "unsubscribe") {
+        printf("Unsubscribed from topic %s\n", topic.c_str());
     } else {
-        printf("Invalid command\n");
+        debug_printf("Invalid command\n");
     }
 }
 
@@ -77,12 +93,22 @@ void handle_tcp() {
         //INT //TODO: GRESEALA AICI SAU IN server.cpp la INT
         case 0:
             uint8_t sign_int;
-            uint32_t value_int;
+            int value_int;
             sign_int = *(uint8_t *)msg->payload;
             value_int = ntohl(*(uint32_t *)(msg->payload + 1)); //FIXME: posibil fara ntohl
             
             if (sign_int)
                 value_int = -value_int;
+
+            // uint8_t sign_int;
+            // int payload_int;
+            // memcpy(&sign_int, buffer + 51, sizeof(char));
+            // memcpy(&payload_int, buffer + 52, sizeof(int));
+
+            // payload_int = ntohl(payload_int);
+
+            // if (sign_int) // negativ
+            //     payload_int = -payload_int;
 
             printf("INT - %d\n", value_int);
             break;
@@ -110,7 +136,7 @@ void handle_tcp() {
             break;
         //STRING
         case 3:
-            msg->payload[PAYLOADSIZE] = '\0'; //FIXME: cred ca e inutil asta
+            msg->payload[PAYLOADSIZE] = '\0';
             printf("STRING - %s\n", msg->payload);
             break;
     }

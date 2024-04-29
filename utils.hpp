@@ -15,7 +15,7 @@ using namespace std;
 	} while (0)
 
 #define BUFSIZE 1600
-#define PAYLOADSIZE 1500
+#define PAYLOADSIZE 1501
 #define MAX_SUBS 32
 
 //TODO: sa vad daca includ id in structura sau fac un

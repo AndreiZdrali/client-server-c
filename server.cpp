@@ -9,9 +9,13 @@
 
 using namespace std;
 
+#define DEBUG false
+
 int sockfd_udp, sockfd_tcp, port, ret;
-struct sockaddr_in addr_udp, addr_tcp;
+struct sockaddr_in addr_udp, addr_tcp, addr_new;
 socklen_t udp_socklen = sizeof(addr_udp);
+socklen_t tcp_socklen = sizeof(addr_tcp);
+socklen_t new_socklen = sizeof(addr_new);
 char buffer[BUFSIZE];
 
 struct pollfd pfds[MAX_SUBS + 2];
@@ -19,6 +23,16 @@ int nfds = 0;
 int running = 1;
 
 vector<subscriber> clients;
+
+void debug_printf(const char *format, ...) {
+    if (DEBUG) {
+        printf("DEBUG: ");
+        va_list args;
+        va_start(args, format);
+        vprintf(format, args);
+        va_end(args);
+    }
+}
 
 void init_udp_tcp() {
     //initializare socket udp
@@ -112,8 +126,7 @@ void handle_stdin() {
         }
         running = 0;
     } else {
-        //FIXME: nu stiu daca printf e conform cerintei
-        printf("Invalid command\n");
+        debug_printf("Invalid command\n");
     }
 }
 
@@ -129,9 +142,10 @@ void handle_udp_message() {
     memset(&tcp_msg, 0, sizeof(tcp_message));
 
     tcp_msg.udp_addr = addr_udp;
-    strcpy(tcp_msg.topic, msg->topic);
+    memcpy(tcp_msg.topic, msg->topic, 50);
+    tcp_msg.topic[51] = '\0';
     tcp_msg.type = msg->type;
-    strcpy(tcp_msg.payload, msg->payload);
+    memcpy(tcp_msg.payload, msg->payload, PAYLOADSIZE);
 
     string topic(msg->topic);
 
@@ -150,7 +164,7 @@ void handle_udp_message() {
 void handle_tcp_request() {
     memset(buffer, 0, BUFSIZE);
 
-    int newsockfd = accept(sockfd_tcp, NULL, NULL);
+    int newsockfd = accept(sockfd_tcp, (sockaddr *) &addr_tcp, &tcp_socklen);
     DIE(newsockfd < 0, "accept");
 
     //dezactiveaza alg lui nagle
@@ -179,7 +193,7 @@ void handle_tcp_request() {
         clients[i].connected = true;
         clients[i].sockfd = newsockfd;
 
-        printf("Client %s reconnected\n", id.c_str());
+        debug_printf("Client %s reconnected\n", id.c_str());
         return;
     }
 
@@ -219,42 +233,45 @@ void handle_tcp_message(int sockfd) {
         return;
     }
 
-    char action[12], topic[51];
-    char *p = strtok(buffer, " ");
-    if (p == NULL) {
-        //printf("Invalid command\n"); //debug
+    string action, topic, buffer_str(buffer);
+
+    size_t pos = buffer_str.find(" ");
+    if (pos == string::npos) {
+        debug_printf("Invalid command\n");
         return;
     }
-    strcpy(action, p);
 
-    p = strtok(NULL, " \n");
-    if (p == NULL) {
-        //printf("Invalid command\n"); //debug
+    action = buffer_str.substr(0, pos);
+
+    size_t start = buffer_str.find_first_not_of(" ", pos);
+    if (start == string::npos) {
+        debug_printf("Invalid command\n");
         return;
     }
-    strcpy(topic, p);
 
-    if (strncmp(buffer, "subscribe", 9) == 0) {
+    pos = buffer_str.find_first_of(" \n", start);
+    topic = buffer_str.substr(start, pos - start);
+
+    if (action == "subscribe") {
         //TODO: vf daca e deja abonat si-l aboneaza (cred ca e gata)
 
         if (is_subscribed_topic(*sub, topic)) {
-            //printf("Client %s already subscribed to topic %s\n", sub->id.c_str(), topic); //debug
+            debug_printf("Client %s already subscribed to topic %s\n", sub->id.c_str(), topic.c_str());
             return;
         }
         sub->topics.push_back(make_pair(topic, topic_to_regex(topic)));
-        //printf("Client %s subscribed to topic %s\n", sub->id.c_str(), topic); //debug
-    } else if (strncmp(buffer, "unsubscribe", 11) == 0) {
+        debug_printf("Client %s subscribed to topic %s\n", sub->id.c_str(), topic.c_str());
+    } else if (action == "unsubscribe") {
         //TODO: vf daca e deja abonat si-l dezaboneaza (cred ca e gata)
         
         for (size_t i = 0; i < sub->topics.size(); i++) {
             if (sub->topics[i].first == topic) {
                 sub->topics.erase(sub->topics.begin() + i);
-                //printf("Client %s unsubscribed from topic %s\n", sub->id.c_str(), topic); //debug
-                return;
+                debug_printf("Client %s unsubscribed from topic %s\n", sub->id.c_str(), topic);
             }
         }
     } else {
-        //printf("Invalid command\n"); //debug
+        debug_printf("Invalid command\n");
     }
 }
 
@@ -310,7 +327,7 @@ int main(int argc, char *argv[]) {
         }
         //primeste mesaj de la un client
         else {
-            for (size_t i = 3; i < nfds; i++) {
+            for (int i = 3; i < nfds; i++) {
                 if ((pfds[i].revents & POLLIN) != 0) {
                     handle_tcp_message(pfds[i].fd);
                 }
