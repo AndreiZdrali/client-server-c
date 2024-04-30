@@ -75,7 +75,12 @@ void handle_stdin() {
 }
 
 void handle_tcp() {
-    ret = recv(sockfd, buffer, sizeof(buffer), 0);
+    //TODO: mai intai sa citesc structura cu marimea si dupa payload
+    int size;
+    ret = recv(sockfd, &size, sizeof(int), 0);
+    DIE(ret < 0, "recv");
+
+    ret = recv(sockfd, buffer, size, 0);
     DIE(ret < 0, "recv");
 
     if (strcmp(buffer, "exit") == 0 || ret == 0) {
@@ -85,46 +90,37 @@ void handle_tcp() {
 
     tcp_message *msg = (tcp_message *)buffer;
     
+    char output[2000];
     //"<IP_CLIENT_UDP>:<PORT_CLIENT_UDP> - <TOPIC> - "
-    printf("%s:%i - %s - ", inet_ntoa(msg->udp_addr.sin_addr), ntohs(msg->udp_addr.sin_port), msg->topic);
+    sprintf(output, "%s:%i - %s - ", inet_ntoa(msg->udp_addr.sin_addr), ntohs(msg->udp_addr.sin_port), msg->topic);
 
     //"<TIP_DATE> - <VALOARE_MESAJ>"
     switch (msg->type) {
-        //INT //TODO: GRESEALA AICI SAU IN server.cpp la INT
+        //INT
         case 0:
             uint8_t sign_int;
             int value_int;
             sign_int = *(uint8_t *)msg->payload;
-            value_int = ntohl(*(uint32_t *)(msg->payload + 1)); //FIXME: posibil fara ntohl
+            value_int = ntohl(*(uint32_t *)(msg->payload + 1));
             
             if (sign_int)
                 value_int = -value_int;
 
-            // uint8_t sign_int;
-            // int payload_int;
-            // memcpy(&sign_int, buffer + 51, sizeof(char));
-            // memcpy(&payload_int, buffer + 52, sizeof(int));
-
-            // payload_int = ntohl(payload_int);
-
-            // if (sign_int) // negativ
-            //     payload_int = -payload_int;
-
-            printf("INT - %d\n", value_int);
+            sprintf(output + strlen(output), "INT - %d\n", value_int);
             break;
         //SHORT_REAL
         case 1:
             float value_short_real;
             value_short_real = (float)ntohs(*(uint16_t *)msg->payload) / 100.0;
 
-            printf("SHORT_REAL - %.2f\n", value_short_real);
+            sprintf(output + strlen(output), "SHORT_REAL - %.2f\n", value_short_real);
             break;
-        //FLOAT //TODO: GRESEALA AICI SAU IN server.cpp la FLOAT
+        //FLOAT
         case 2:
             float value_float;
             uint8_t sign_float, power;
             sign_float = *(uint8_t *)msg->payload;
-            value_float = ntohl(*(uint32_t *)(msg->payload + 1)); //FIXME: posibil fara ntohl
+            value_float = ntohl(*(uint32_t *)(msg->payload + 1));
             power = *(uint8_t *)(msg->payload + 5);
 
             value_float /= pow(10, power);
@@ -132,14 +128,15 @@ void handle_tcp() {
             if (sign_float)
                 value_float = -value_float;
 
-            printf("FLOAT - %.4f\n", value_float);
+            sprintf(output + strlen(output), "FLOAT - %.4f\n", value_float);
             break;
         //STRING
         case 3:
-            msg->payload[PAYLOADSIZE] = '\0';
-            printf("STRING - %s\n", msg->payload);
+            sprintf(output + strlen(output), "STRING - %s\n", msg->payload);
             break;
     }
+
+    printf("%s", output);
 }
 
 int main(int argc, char *argv[]) {

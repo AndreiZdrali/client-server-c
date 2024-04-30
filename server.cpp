@@ -53,6 +53,8 @@ void init_udp_tcp() {
     //dezactiveaza alg lui nagle
     int flag = 1;
     setsockopt(sockfd_tcp, IPPROTO_TCP, TCP_NODELAY, (char *) &flag, sizeof(int));
+    //SO_REUSEADDR pt a putea folosi acelasi port
+    setsockopt(sockfd_tcp, SOL_SOCKET, SO_REUSEADDR, &flag, sizeof(int));
 
     memset((char *) &addr_tcp, 0, sizeof(addr_tcp));
     addr_tcp.sin_family = AF_INET;
@@ -138,14 +140,24 @@ void handle_udp_message() {
 
     udp_message *msg = (udp_message *) buffer;
 
+    //TODO: mai intai sa trimit marimea, abia dupa structura cu payload limitat
+    int size = sizeof(struct sockaddr_in) + 51 + sizeof(uint8_t);
+    if (msg->type == 0) size += 1 + sizeof(uint32_t);
+    else if (msg->type == 1) size += sizeof(uint16_t);
+    else if (msg->type == 2) size += 1 + sizeof(uint32_t) + sizeof(uint8_t);
+    else if (msg->type == 3) {
+        size += strlen(msg->payload) + 1;
+        msg->payload[strlen(msg->payload)] = '\0';
+    }
+
     tcp_message tcp_msg;
     memset(&tcp_msg, 0, sizeof(tcp_message));
 
     tcp_msg.udp_addr = addr_udp;
     memcpy(tcp_msg.topic, msg->topic, 50);
-    tcp_msg.topic[51] = '\0';
     tcp_msg.type = msg->type;
-    memcpy(tcp_msg.payload, msg->payload, PAYLOADSIZE);
+
+    memcpy(tcp_msg.payload, msg->payload, size - sizeof(struct sockaddr_in) - 51 - sizeof(uint8_t));
 
     string topic(msg->topic);
 
@@ -155,7 +167,10 @@ void handle_udp_message() {
         }
 
         if (is_subscribed_regex(clients[i], topic)) {
-            ret = send(clients[i].sockfd, &tcp_msg, sizeof(tcp_msg), 0);
+            ret = send(clients[i].sockfd, &size, sizeof(int), 0);
+            DIE(ret < 0, "send");
+
+            ret = send(clients[i].sockfd, &tcp_msg, size, 0);
             DIE(ret < 0, "send");
         }
     }
@@ -183,7 +198,7 @@ void handle_tcp_request() {
         }
 
         if (clients[i].connected) {
-            printf("Client %s already connected\n", id.c_str());
+            printf("Client %s already connected.\n", id.c_str());
 
             //TODO: trimite mesaj exit catre client
             close(newsockfd);
@@ -192,6 +207,10 @@ void handle_tcp_request() {
 
         clients[i].connected = true;
         clients[i].sockfd = newsockfd;
+
+        //TODO: nu stiu daca printf asta trb
+        printf("New client %s connected from %s:%hu.\n", id.c_str(), inet_ntoa(addr_tcp.sin_addr), ntohs(addr_tcp.sin_port));
+
 
         debug_printf("Client %s reconnected\n", id.c_str());
         return;
