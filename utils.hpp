@@ -18,8 +18,6 @@ using namespace std;
 #define PAYLOADSIZE 1501
 #define MAX_SUBS 32
 
-//TODO: sa vad daca includ id in structura sau fac un
-//unordered_map<string, subscriber> clients
 typedef struct {
     string id;
     int sockfd;

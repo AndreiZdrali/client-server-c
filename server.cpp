@@ -140,7 +140,7 @@ void handle_udp_message() {
 
     udp_message *msg = (udp_message *) buffer;
 
-    //TODO: mai intai sa trimit marimea, abia dupa structura cu payload limitat
+    //mai intai sa trimit marimea, abia dupa structura cu payload trunchiat
     int size = sizeof(struct sockaddr_in) + 51 + sizeof(uint8_t);
     if (msg->type == 0) size += 1 + sizeof(uint32_t);
     else if (msg->type == 1) size += sizeof(uint16_t);
@@ -208,7 +208,6 @@ void handle_tcp_request() {
         clients[i].connected = true;
         clients[i].sockfd = newsockfd;
 
-        //TODO: nu stiu daca printf asta trb
         printf("New client %s connected from %s:%hu.\n", id.c_str(), inet_ntoa(addr_tcp.sin_addr), ntohs(addr_tcp.sin_port));
 
 
@@ -272,8 +271,6 @@ void handle_tcp_message(int sockfd) {
     topic = buffer_str.substr(start, pos - start);
 
     if (action == "subscribe") {
-        //TODO: vf daca e deja abonat si-l aboneaza (cred ca e gata)
-
         if (is_subscribed_topic(*sub, topic)) {
             debug_printf("Client %s already subscribed to topic %s\n", sub->id.c_str(), topic.c_str());
             return;
@@ -281,8 +278,6 @@ void handle_tcp_message(int sockfd) {
         sub->topics.push_back(make_pair(topic, topic_to_regex(topic)));
         debug_printf("Client %s subscribed to topic %s\n", sub->id.c_str(), topic.c_str());
     } else if (action == "unsubscribe") {
-        //TODO: vf daca e deja abonat si-l dezaboneaza (cred ca e gata)
-        
         for (size_t i = 0; i < sub->topics.size(); i++) {
             if (sub->topics[i].first == topic) {
                 sub->topics.erase(sub->topics.begin() + i);

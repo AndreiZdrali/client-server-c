@@ -45,7 +45,6 @@ void handle_stdin() {
     ret = send(sockfd, buffer, strlen(buffer), 0);
     DIE(ret < 0, "send");
 
-    //TODO: sa rescriu cu find si aici si in server.cpp
     string action, topic, buffer_str(buffer);
 
     size_t pos = buffer_str.find(" ");
@@ -75,7 +74,7 @@ void handle_stdin() {
 }
 
 void handle_tcp() {
-    //TODO: mai intai sa citesc structura cu marimea si dupa payload
+    //mai intai citesc structura cu marimea si dupa payload
     int size;
     ret = recv(sockfd, &size, sizeof(int), 0);
     DIE(ret < 0, "recv");
