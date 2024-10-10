@@ -2,7 +2,7 @@
 
 ## Overview
 
-This project implements a server application in C that supports both TCP and UDP protocols. It allows multiple clients to connect simultaneously, providing a framework for communication and notifications.
+This project implements a client-server application in C that supports both TCP and UDP protocols. It allows multiple clients to connect simultaneously, providing a framework for communication and notifications.
 
 ## Features
 
