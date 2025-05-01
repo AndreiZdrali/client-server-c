@@ -12,10 +12,10 @@ using namespace std;
 #define DEBUG false
 
 int sockfd_udp, sockfd_tcp, port, ret;
-struct sockaddr_in addr_udp, addr_tcp, addr_new;
-socklen_t udp_socklen = sizeof(addr_udp);
-socklen_t tcp_socklen = sizeof(addr_tcp);
-socklen_t new_socklen = sizeof(addr_new);
+struct sockaddr_in udp_addrin, tcp_addrin, new_addrin;
+socklen_t udp_socklen = sizeof(udp_addrin);
+socklen_t tcp_socklen = sizeof(tcp_addrin);
+socklen_t new_socklen = sizeof(new_addrin);
 char buffer[BUFSIZE];
 
 struct pollfd pfds[MAX_SUBS + 2];
@@ -39,11 +39,11 @@ void init_udp_tcp() {
     sockfd_udp = socket(AF_INET, SOCK_DGRAM, 0);
     DIE(sockfd_udp < 0, "socket");
 
-    memset((char *) &addr_udp, 0, sizeof(addr_udp));
-    addr_udp.sin_family = AF_INET;
-    addr_udp.sin_addr.s_addr = INADDR_ANY;
-    addr_udp.sin_port = htons(port);
-    ret = bind(sockfd_udp, (struct sockaddr *) &addr_udp, sizeof(addr_udp));
+    memset((char *) &udp_addrin, 0, sizeof(udp_addrin));
+    udp_addrin.sin_family = AF_INET;
+    udp_addrin.sin_addr.s_addr = INADDR_ANY;
+    udp_addrin.sin_port = htons(port);
+    ret = bind(sockfd_udp, (struct sockaddr *) &udp_addrin, sizeof(udp_addrin));
     DIE(ret < 0, "bind");
 
     //initializare socket tcp
@@ -56,11 +56,11 @@ void init_udp_tcp() {
     //SO_REUSEADDR pt a putea folosi acelasi port
     setsockopt(sockfd_tcp, SOL_SOCKET, SO_REUSEADDR, &flag, sizeof(int));
 
-    memset((char *) &addr_tcp, 0, sizeof(addr_tcp));
-    addr_tcp.sin_family = AF_INET;
-    addr_tcp.sin_addr.s_addr = INADDR_ANY;
-    addr_tcp.sin_port = htons(port);
-    ret = bind(sockfd_tcp, (struct sockaddr *) &addr_tcp, sizeof(addr_tcp));
+    memset((char *) &tcp_addrin, 0, sizeof(tcp_addrin));
+    tcp_addrin.sin_family = AF_INET;
+    tcp_addrin.sin_addr.s_addr = INADDR_ANY;
+    tcp_addrin.sin_port = htons(port);
+    ret = bind(sockfd_tcp, (struct sockaddr *) &tcp_addrin, sizeof(tcp_addrin));
     DIE(ret < 0, "bind");
 
     ret = listen(sockfd_tcp, MAX_SUBS);
@@ -132,10 +132,10 @@ void handle_stdin() {
     }
 }
 
-void handle_udp_message() {
+void process_udp() {
     memset(buffer, 0, BUFSIZE);
 
-    ret = recvfrom(sockfd_udp, buffer, BUFSIZE, 0, (struct sockaddr *) &addr_udp, &udp_socklen);
+    ret = recvfrom(sockfd_udp, buffer, BUFSIZE, 0, (struct sockaddr *) &udp_addrin, &udp_socklen);
     DIE(ret < 0, "recvfrom");
 
     udp_message *msg = (udp_message *) buffer;
@@ -153,7 +153,7 @@ void handle_udp_message() {
     tcp_message tcp_msg;
     memset(&tcp_msg, 0, sizeof(tcp_message));
 
-    tcp_msg.udp_addr = addr_udp;
+    tcp_msg.udp_addr = udp_addrin;
     memcpy(tcp_msg.topic, msg->topic, 50);
     tcp_msg.type = msg->type;
 
@@ -176,10 +176,10 @@ void handle_udp_message() {
     }
 }
 
-void handle_tcp_request() {
+void new_connection_request() {
     memset(buffer, 0, BUFSIZE);
 
-    int newsockfd = accept(sockfd_tcp, (sockaddr *) &addr_tcp, &tcp_socklen);
+    int newsockfd = accept(sockfd_tcp, (sockaddr *) &tcp_addrin, &tcp_socklen);
     DIE(newsockfd < 0, "accept");
 
     //dezactiveaza alg lui nagle
@@ -208,7 +208,7 @@ void handle_tcp_request() {
         clients[i].connected = true;
         clients[i].sockfd = newsockfd;
 
-        printf("New client %s connected from %s:%hu.\n", id.c_str(), inet_ntoa(addr_tcp.sin_addr), ntohs(addr_tcp.sin_port));
+        printf("New client %s connected from %s:%hu.\n", id.c_str(), inet_ntoa(tcp_addrin.sin_addr), ntohs(tcp_addrin.sin_port));
 
 
         debug_printf("Client %s reconnected\n", id.c_str());
@@ -228,10 +228,10 @@ void handle_tcp_request() {
 
     clients.push_back(sub);
 
-    printf("New client %s connected from %s:%hu.\n", id.c_str(), inet_ntoa(addr_tcp.sin_addr), ntohs(addr_tcp.sin_port));
+    printf("New client %s connected from %s:%hu.\n", id.c_str(), inet_ntoa(tcp_addrin.sin_addr), ntohs(tcp_addrin.sin_port));
 }
 
-void handle_tcp_message(int sockfd) {
+void process_command_tcp(int sockfd) {
     //TODO: cazuri cu subscribe, unsubscribe, exit
     memset(buffer, 0, BUFSIZE);
 
@@ -333,17 +333,17 @@ int main(int argc, char *argv[]) {
         }
         //primeste mesaj udp
         else if ((pfds[1].revents & POLLIN) != 0) {
-            handle_udp_message();
+            process_udp();
         }
         //primeste cerere de conexiune tcp
         else if ((pfds[2].revents & POLLIN) != 0) {
-            handle_tcp_request();
+            new_connection_request();
         }
         //primeste mesaj de la un client
         else {
             for (int i = 3; i < nfds; i++) {
                 if ((pfds[i].revents & POLLIN) != 0) {
-                    handle_tcp_message(pfds[i].fd);
+                    process_command_tcp(pfds[i].fd);
                 }
             }
         }
